@@ -1,5 +1,5 @@
 import { type Api, Bot } from "grammy";
-import { botCreator, bots, WEBHOOK_HOST } from "./bot";
+import { botCreator, bots, dropBot, WEBHOOK_HOST } from "./bot";
 import logger from "./lib/logger";
 import { botTokenSchema } from "./schema";
 import db from "./store";
@@ -87,6 +87,40 @@ async function avatar(
     }
 }
 
+/** Points a token at this instance and records who owns it. */
+export async function adoptBot(
+    token: string,
+    botId: number,
+    ownerId: number,
+    managerId?: number
+): Promise<
+    { ok: true; alreadyRunning: boolean } | { ok: false; error: string }
+> {
+    if (!WEBHOOK_HOST) {
+        return { ok: false, error: "Cloning is not set up on this instance." };
+    }
+
+    const alreadyRunning = bots.has(token);
+    if (!alreadyRunning) {
+        const bot = botCreator(token);
+        try {
+            await bot.api.setWebhook(`${WEBHOOK_HOST}/bot${token}`, {
+                drop_pending_updates: true
+            });
+        } catch (error: any) {
+            bots.delete(token);
+            const why = error.description ?? error.message ?? "unknown error";
+            logger.warn(`Webhook failed for bot ${botId}: ${why}`);
+            return { ok: false, error: `Telegram refused the webhook: ${why}` };
+        }
+        // Only once the new token works: evicting earlier strands a live bot.
+        dropBot(botId, token);
+    }
+
+    await db.setOwner(botId, ownerId, managerId);
+    return { ok: true, alreadyRunning };
+}
+
 /** Starts the bot if it is new, and makes the caller its owner either way. */
 export async function claimBot(
     raw: string,
@@ -99,23 +133,12 @@ export async function claimBot(
     const info = await describeBot(raw);
     if (!info.ok) return info;
 
-    const token = botTokenSchema.parse(raw);
-    const alreadyRunning = bots.has(token);
+    const result = await adoptBot(
+        botTokenSchema.parse(raw),
+        info.bot.id,
+        ownerId
+    );
+    if (!result.ok) return result;
 
-    if (!alreadyRunning) {
-        const bot = botCreator(token);
-        try {
-            await bot.api.setWebhook(`${WEBHOOK_HOST}/bot${token}`, {
-                drop_pending_updates: true
-            });
-        } catch (error: any) {
-            bots.delete(token);
-            const why = error.description ?? error.message ?? "unknown error";
-            logger.warn(`Webhook failed for bot ${info.bot.id}: ${why}`);
-            return { ok: false, error: `Telegram refused the webhook: ${why}` };
-        }
-    }
-
-    await db.setOwner(info.bot.id, ownerId);
-    return { ok: true, bot: info.bot, alreadyRunning };
+    return { ok: true, bot: info.bot, alreadyRunning: result.alreadyRunning };
 }

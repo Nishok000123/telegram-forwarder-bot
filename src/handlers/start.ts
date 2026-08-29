@@ -1,4 +1,4 @@
-import { type BotContext, miniAppUrl } from "../bot";
+import { type BotContext, miniAppUrl, newBotLink } from "../bot";
 import { ownership } from "./owner_only";
 
 const LINKS =
@@ -11,8 +11,10 @@ export default async function start_handler(ctx: BotContext) {
 
     const settings = miniAppUrl(ctx.me.id);
     const help = miniAppUrl(ctx.me.id, "help");
-    // The not-owner screen is where a stranger sets up their own bot.
-    const clone = !isOwner ? miniAppUrl(ctx.me.id, "not-owner") : undefined;
+    const clone =
+        !isOwner && !unclaimed ? miniAppUrl(ctx.me.id, "clone") : undefined;
+    // Not offered while unclaimed: the bot in front of them is free to take.
+    const newBot = !isOwner && !unclaimed ? newBotLink(ctx.me) : undefined;
 
     // Everything that sets up forwarding is owner-only, so pointing a stranger
     // at /set only earns them a refusal.
@@ -21,6 +23,10 @@ export default async function start_handler(ctx: BotContext) {
         body += "Send /set to pick the two chats.";
     } else if (unclaimed) {
         body += "Nobody owns me yet. Send /set_owner to claim me.";
+    } else if (newBot) {
+        body +=
+            "This one belongs to someone else. Tap below and Telegram makes you " +
+            "your own — no token, nothing to set up.";
     } else {
         body +=
             "This one belongs to someone else. Set up your own with the button " +
@@ -31,8 +37,18 @@ export default async function start_handler(ctx: BotContext) {
         ...(settings && isOwner
             ? [[{ text: "Settings", web_app: { url: settings } }]]
             : []),
+        ...(newBot ? [[{ text: "Create your own bot", url: newBot }]] : []),
         ...(clone
-            ? [[{ text: "Use your own bot", web_app: { url: clone } }]]
+            ? [
+                  [
+                      {
+                          text: newBot
+                              ? "I already have a bot"
+                              : "Create your own bot",
+                          web_app: { url: clone }
+                      }
+                  ]
+              ]
             : []),
         ...(help ? [[{ text: "How it works", web_app: { url: help } }]] : [])
     ];

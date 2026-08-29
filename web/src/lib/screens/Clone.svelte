@@ -1,4 +1,7 @@
 <script lang="ts">
+import { cubicOut } from "svelte/easing";
+import { prefersReducedMotion } from "svelte/motion";
+import { slide } from "svelte/transition";
 import { tokenIssue } from "$schema";
 import * as api from "../api";
 import Avatar from "../components/Avatar.svelte";
@@ -20,6 +23,18 @@ let {
     backLabel?: string;
 } = $props();
 
+// Pasting a token always works, so only what depends on the probe waits.
+let options = $state<{ newBotLink?: string } | null>(null);
+const newBotLink = $derived(options?.newBotLink);
+api.cloneOptions()
+    .then((o) => {
+        options = o;
+    })
+    .catch(() => {
+        // The token path always works, so a failed probe is not an error.
+        options = {};
+    });
+
 let token = $state("");
 let checking = $state(false);
 let claiming = $state(false);
@@ -28,6 +43,8 @@ let found = $state<api.BotInfo | null>(null);
 let claimed = $state<{ bot: api.BotInfo; alreadyRunning: boolean } | null>(
     null
 );
+
+const ms = (full: number) => (prefersReducedMotion.current ? 0 : full);
 
 const issue = $derived(tokenIssue(token));
 const ready = $derived(token.trim() !== "" && issue === null);
@@ -77,7 +94,7 @@ const steps = [
     },
     {
         title: "Paste it above",
-        body: "Your clone starts straight away, with its own chats and rules."
+        body: "Your bot starts straight away, with its own chats and rules."
     }
 ];
 </script>
@@ -90,13 +107,13 @@ const steps = [
     <Hero
         icon="key"
         photo={claimed?.bot.photo}
-        title={claimed ? "All yours" : "Clone bot"}
+        title={claimed ? "All yours" : "Your own bot"}
     >
         {#if claimed}
-            Your own clone is running.
+            Your own bot is running.
         {:else}
-            Point your own bot at this server and it runs the same forwarding,
-            with its own chats and rules. It takes about a minute.
+            Your own bot runs the same forwarding here, with its own chats and
+            rules. It takes about a minute.
         {/if}
     </Hero>
 
@@ -121,7 +138,7 @@ const steps = [
         <p class="note">
             {claimed.alreadyRunning
                 ? "It was already running here, so its forwarding is untouched."
-                : "Open it and send /set to choose the two chats."}
+                : "Open it and send /settings to choose what it forwards."}
         </p>
 
         <div class="actions-stack">
@@ -183,6 +200,32 @@ const steps = [
 
         {#if error}<p class="banner">{error}</p>{/if}
     {:else}
+        {#if newBotLink}
+            <div
+                class="reveal"
+                transition:slide={{ duration: ms(260), easing: cubicOut }}
+            >
+            <div class="actions-stack">
+                <button
+                    type="button"
+                    class="btn"
+                    onclick={() => {
+                        // Telegram takes over; left open, the app spins behind
+                        // its panel.
+                        openTelegramLink(newBotLink!);
+                        close();
+                    }}
+                >
+                    Create your own bot
+                </button>
+            </div>
+            <p class="note">
+                Telegram asks you for a name, creates the bot and hands it
+                straight to me. It then messages you here when it is ready.
+            </p>
+            </div>
+        {/if}
+
         <h2 class="section-title">Bot token</h2>
         <div class="card">
             <input
@@ -197,14 +240,15 @@ const steps = [
         </div>
         {#if issue}<p class="note invalid-note">{issue}</p>{/if}
         <p class="note">
-            Checked with Telegram and never stored. If you created this bot,
-            pasting its token takes it back.
+            {newBotLink
+                ? "Paste the token of a bot you made yourself. It is checked with Telegram and never stored — and if this bot is already running here, pasting its token takes it back."
+                : "Checked with Telegram and never stored. If you created this bot, pasting its token takes it back."}
         </p>
 
         <div class="actions-stack">
             <button
                 type="button"
-                class="btn"
+                class="btn {newBotLink ? 'secondary' : ''}"
                 disabled={!ready || checking}
                 onclick={check}
             >
@@ -214,6 +258,7 @@ const steps = [
 
         {#if error}<p class="banner">{error}</p>{/if}
 
+        {#if options && !newBotLink}
         <h2 class="section-title">No bot yet?</h2>
         <div class="card">
             {#each steps as step, i}
@@ -236,5 +281,18 @@ const steps = [
                 Open BotFather
             </button>
         </div>
+        {/if}
     {/if}
 </Page>
+
+<style>
+/* slide clips the wrapper, so the first child's margin cannot collapse
+   through it: the wrapper owns that gap instead. */
+.reveal {
+    margin-top: 12px;
+}
+
+.reveal > :first-child {
+    margin-top: 0;
+}
+</style>

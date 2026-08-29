@@ -10,7 +10,7 @@ import express, {
 import { webhookCallback } from "grammy";
 import packageJson from "../package.json";
 import { createApiRouter, param } from "./api";
-import { botCreator, bots, WEBHOOK_HOST } from "./bot";
+import { botCreator, bots, dropBot, WEBHOOK_HOST } from "./bot";
 import { flush, startCounter } from "./forwarding/counter";
 import logger from "./lib/logger";
 
@@ -80,7 +80,9 @@ app.post("/bot:token", async (req: Request, res: Response) => {
     let bot = bots.get(token);
 
     if (!bot) {
-        bot = await botCreator(token);
+        bot = botCreator(token);
+        // A rotation elsewhere leaves the revoked token for getBotById to find.
+        dropBot(Number(token.split(":")[0]), token);
     }
 
     try {

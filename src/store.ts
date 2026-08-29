@@ -33,7 +33,11 @@ export type StoredRoute = {
 };
 
 const routeCache = new Cache<Route[]>("routes");
-const ownerCache = new Cache<number | null>("owner");
+// The whole row: owner and manager are read on the same paths.
+const botCache = new Cache<{
+    ownerId: number | null;
+    managerId: number | null;
+}>("bot");
 
 const routeKey = (botId: number, sourceChatId: number) =>
     `${botId}:${sourceChatId}`;
@@ -43,27 +47,39 @@ const UUID_RE =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 class Store {
-    async getOwner(botId: number): Promise<number | undefined> {
-        const owner = await ownerCache.get(String(botId), async () => {
+    private async getBot(botId: number) {
+        return botCache.get(String(botId), async () => {
             const [row] = await db
-                .select({ ownerId: bots.ownerId })
+                .select({ ownerId: bots.ownerId, managerId: bots.managerId })
                 .from(bots)
                 .where(eq(bots.botId, botId))
                 .limit(1);
-            return row?.ownerId ?? null;
+            return row ?? { ownerId: null, managerId: null };
         });
-        return owner ?? undefined;
     }
 
-    async setOwner(botId: number, userId: number) {
+    async getOwner(botId: number): Promise<number | undefined> {
+        return (await this.getBot(botId)).ownerId ?? undefined;
+    }
+
+    /** The bot that created this one through Telegram's managed-bot flow. */
+    async getManager(botId: number): Promise<number | undefined> {
+        return (await this.getBot(botId)).managerId ?? undefined;
+    }
+
+    /** managerId is only ever set, never cleared: a bot stays Telegram-managed. */
+    async setOwner(botId: number, userId: number, managerId?: number) {
         await db
             .insert(bots)
-            .values({ botId, ownerId: userId })
+            .values({ botId, ownerId: userId, managerId })
             .onConflictDoUpdate({
                 target: bots.botId,
-                set: { ownerId: userId }
+                set: {
+                    ownerId: userId,
+                    ...(managerId !== undefined && { managerId })
+                }
             });
-        await ownerCache.invalidate(String(botId));
+        await botCache.invalidate(String(botId));
     }
 
     async getRoutes(botId: number, sourceChatId: number): Promise<Route[]> {
@@ -365,6 +381,21 @@ class Store {
         for (const { botId, sourceChatId } of affected) {
             await routeCache.invalidate(routeKey(botId, sourceChatId));
             await routeCache.invalidate(routeKey(botId, newId));
+        }
+    }
+
+    /**
+     * Stats cascade from the routes. The row stays: it holds the manager, which
+     * Telegram states once and never again.
+     */
+    async clearRoutes(botId: number): Promise<void> {
+        const gone = await db
+            .delete(routes)
+            .where(eq(routes.botId, botId))
+            .returning({ sourceChatId: routes.sourceChatId });
+
+        for (const { sourceChatId } of gone) {
+            await routeCache.invalidate(routeKey(botId, sourceChatId));
         }
     }
 

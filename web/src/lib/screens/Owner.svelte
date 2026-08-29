@@ -1,5 +1,9 @@
 <script lang="ts">
+import { cubicOut } from "svelte/easing";
+import { prefersReducedMotion } from "svelte/motion";
+import { slide } from "svelte/transition";
 import * as api from "../api";
+import ActionRow from "../components/ActionRow.svelte";
 import BackBar from "../components/BackBar.svelte";
 import Hero from "../components/Hero.svelte";
 import Page from "../components/Page.svelte";
@@ -17,6 +21,66 @@ let handedTo = $state<number | null>(null);
 let copied = $state(false);
 
 const mine = myId();
+
+// Only for bots Telegram created: the manager holds their tokens.
+let managed = $state(false);
+let managedBusy = $state(false);
+// Its own, so a failure here never renders as a rejected user id below.
+let managedError = $state("");
+
+// A JS transition is outside the stylesheet's reduced-motion rule.
+const ms = (full: number) => (prefersReducedMotion.current ? 0 : full);
+api.managedState()
+    .then((state) => {
+        managed = state.managed;
+    })
+    .catch(() => {
+        // Not managed, or the manager is not running: the section stays hidden.
+    });
+
+async function patchManaged(patch: { rotate?: boolean; remove?: boolean }) {
+    if (managedBusy) return;
+    managedBusy = true;
+    managedError = "";
+    try {
+        await run(() => api.updateManaged(patch));
+    } catch (e: any) {
+        managedError = e.message;
+    } finally {
+        managedBusy = false;
+    }
+}
+
+/** No Bot API method deletes a bot; @BotFather is the only place. */
+async function removeBot() {
+    if (
+        !(await ask(
+            "Delete this bot's setup?",
+            [
+                "Everything it forwards, and every rule you have set, is deleted here for good.",
+                "The bot itself stays on Telegram, and stops until you set it up again. Delete it in @BotFather if you want it gone entirely."
+            ],
+            "Delete"
+        ))
+    ) {
+        return;
+    }
+    await patchManaged({ remove: true });
+    if (!managedError) close();
+}
+
+async function replaceToken() {
+    if (
+        !(await ask(
+            "Replace this bot's token?",
+            "The current one stops working immediately, so anything else using it — another host, a script — stops with it. Forwarding here continues on the new token.",
+            "Replace"
+        ))
+    ) {
+        return;
+    }
+    await patchManaged({ rotate: true });
+}
 
 async function copyMine() {
     if (mine === undefined || !(await copyText(String(mine)))) return;
@@ -88,6 +152,36 @@ async function handOver() {
             {/if}
         </div>
 
+        {#if managed}
+            <div
+                class="reveal"
+                transition:slide={{ duration: ms(260), easing: cubicOut }}
+            >
+            <h2 class="section-title">This bot</h2>
+            <div class="card inset-rules">
+                <ActionRow
+                    icon="key"
+                    label={managedBusy ? "Working…" : "Replace token"}
+                    disabled={managedBusy}
+                    onclick={replaceToken}
+                />
+                <ActionRow
+                    icon="trash"
+                    tone="destructive"
+                    label="Delete setup"
+                    disabled={managedBusy}
+                    onclick={removeBot}
+                />
+            </div>
+            {#if managedError}<p class="note invalid-note">{managedError}</p>{/if}
+            <p class="note">
+                Telegram created this bot for me, so I can change its token
+                without @BotFather. Deleting removes what it forwards from here;
+                the bot itself is only ever deleted in @BotFather.
+            </p>
+            </div>
+        {/if}
+
         <h2 class="section-title">Hand it over</h2>
         <div class="card">
             <input
@@ -125,3 +219,15 @@ async function handOver() {
         </p>
     {/if}
 </Page>
+
+<style>
+/* slide clips the wrapper, so the first child's margin cannot collapse
+   through it: the wrapper owns that gap instead. */
+.reveal {
+    margin-top: 24px;
+}
+
+.reveal > :first-child {
+    margin-top: 0;
+}
+</style>

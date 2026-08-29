@@ -1,10 +1,12 @@
 import { autoRetry } from "@grammyjs/auto-retry";
 import { type ParseModeFlavor, parseMode } from "@grammyjs/parse-mode";
 import { Bot, Composer, type Context } from "grammy";
+import type { UserFromGetMe } from "grammy/types";
 import bot_token_handler from "./handlers/bot_token";
 import cancel_handler from "./handlers/cancel";
 import get_chat_handler from "./handlers/get_chat";
 import help_handler from "./handlers/help";
+import managed_bot_handler from "./handlers/managed_bot";
 import message_handler from "./handlers/message";
 import my_chat_member_handler from "./handlers/my_chat_member";
 import owner_only from "./handlers/owner_only";
@@ -56,7 +58,7 @@ export const botCreator = (token: string) => {
             },
             {
                 command: "settings",
-                description: "Change how a chat is forwarded"
+                description: "Open settings"
             },
             {
                 command: "cancel",
@@ -100,10 +102,37 @@ export const getBotById = (botId: number) => {
     }
 };
 
+/** The map is keyed by token, so a rotated one would leave the old entry behind. */
+export const dropBot = (botId: number, keep?: string) => {
+    const prefix = `${botId}:`;
+    for (const token of bots.keys()) {
+        if (token.startsWith(prefix) && token !== keep) bots.delete(token);
+    }
+};
+
+/** Enabled per bot in @BotFather ("Bot Management Mode"); getMe carries the flag. */
+export const newBotLink = (me: UserFromGetMe) =>
+    me.can_manage_bots
+        ? `https://t.me/newbot/${me.username}?name=Forwarder`
+        : undefined;
+
+/** init() is idempotent; without it botInfo throws until the first update. */
+export const newBotLinkFor = async (botId: number) => {
+    const bot = getBotById(botId);
+    if (!bot) return undefined;
+    try {
+        if (!bot.isInited()) await bot.init();
+        return newBotLink(bot.botInfo);
+    } catch (err: any) {
+        logger.debug(`No bot info for ${botId}: ${err.message}`);
+        return undefined;
+    }
+};
+
 /** The bot id is verified against the initData signature, so it is safe in the URL. */
 export const miniAppUrl = (
     botId: number,
-    view: "settings" | "help" | "not-owner" = "settings"
+    view: "settings" | "help" | "not-owner" | "clone" = "settings"
 ) => (WEBHOOK_HOST ? `${WEBHOOK_HOST}/app/${view}?bot=${botId}` : undefined);
 
 const wrapper =
@@ -138,6 +167,13 @@ privateChat.on("msg:text").filter(
 );
 
 composer.on("msg", message_handler);
+
+// No wrapper: the update carries no chat, so ctx.reply has nowhere to go.
+composer.on("managed_bot", (ctx) =>
+    managed_bot_handler(ctx).catch((err) =>
+        logger.error(`managed_bot failed: ${err.message}`)
+    )
+);
 
 // No wrapper: it replies to the chat, and this fires for chats the bot has
 // just been thrown out of.

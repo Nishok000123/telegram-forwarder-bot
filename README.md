@@ -37,7 +37,7 @@ Forwards messages from one chat to many, each destination with its own filters a
 - **Albums stay albums.** Grouped media arrives grouped, not split into separate messages.
 - **Linear-time patterns.** Regex runs on RE2, so a user pattern cannot hang the bot.
 - **Native chat picker.** Telegram's own chat list, so there are no ids to type.
-- **Self-service cloning.** Paste a BotFather token and you own a clone. Tokens are verified with Telegram and never stored.
+- **Self-service cloning.** Telegram creates the bot, or paste a BotFather token. Tokens are never stored.
 
 ---
 
@@ -79,10 +79,24 @@ matched against is trimmed, so an invisible trailing space cannot silently stop
 a rule matching. Prepended and appended text keeps its own newlines and goes on
 its own line, so a signature needs no blank line typed in front of it.
 
-Only the owner can open it. Everyone else lands on a page where they can paste
-their own bot's token — confirmed with `getMe` and shown for approval before
-anything is claimed. Pasting the token of a bot already running here hands it
-back, which is how you recover a bot whose ownership you lost.
+Only the owner can open it. Everyone else lands on a page for setting up their
+own bot, created by Telegram or from a BotFather token. Pasting the token of a
+bot already running here hands it back, which is how you recover a bot whose
+ownership you lost.
+
+### Bot Management Mode
+
+With it on, a stranger taps *Create your own bot*, names it, and Telegram
+creates it. Off, only the BotFather route is offered.
+
+Enable it on the bot that does the creating; the bots it creates do not need it:
+
+1. Open [BotFather](https://t.me/BotFather) and send `/mybots`
+2. Pick the bot → *Bot Settings* → *Bot Management Mode* → *Enable*
+3. Restart this instance — the flag is read at startup
+
+Owners of a created bot also get *Replace token* and *Delete setup* under
+Settings → Owner, both acting through the bot that created it.
 
 ### Open button
 
@@ -160,6 +174,9 @@ bun run db:migrate
 
 After editing `src/db/schema.ts`, regenerate with `bun run db:generate` and
 apply. `bun run db:studio` opens a browser UI over the database.
+
+Migrate before deploying the code that needs it, and roll back in the reverse
+order — revert the deploy, then the schema.
 
 Upgrading from a Redis-backed version? Backfill once — it reads Redis, writes
 Postgres and deletes nothing:

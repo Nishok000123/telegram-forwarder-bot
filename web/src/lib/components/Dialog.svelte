@@ -1,5 +1,8 @@
 <script lang="ts">
 import type { Snippet } from "svelte";
+import { cubicOut } from "svelte/easing";
+import { prefersReducedMotion } from "svelte/motion";
+import { fade, scale } from "svelte/transition";
 
 // A question when given oncancel, a message to acknowledge when not: the one
 // button dismisses, and so do Escape and the scrim.
@@ -18,12 +21,20 @@ let {
 } = $props();
 
 const label = $derived(confirmLabel ?? (oncancel ? "Confirm" : "OK"));
+
+// JS transitions are outside the reduced-motion rule the stylesheet applies.
+const ms = (full: number) => (prefersReducedMotion.current ? 0 : full);
 const dismiss = () => (oncancel ?? onconfirm)();
 </script>
 
 <svelte:window onkeydown={(e) => e.key === "Escape" && dismiss()} />
 
-<div class="scrim" role="presentation" onclick={dismiss}>
+<div
+    class="scrim"
+    role="presentation"
+    onclick={dismiss}
+    transition:fade={{ duration: ms(150) }}
+>
     <!-- Stops a tap inside the dialog reaching the dismiss handler above. -->
     <div
         class="dialog"
@@ -33,6 +44,8 @@ const dismiss = () => (oncancel ?? onconfirm)();
         aria-label={title}
         onclick={(e) => e.stopPropagation()}
         onkeydown={() => {}}
+        in:scale={{ start: 0.96, duration: ms(200), easing: cubicOut }}
+        out:scale={{ start: 0.98, duration: ms(120), easing: cubicOut }}
     >
         <h2>{title}</h2>
         {@render children()}
@@ -60,7 +73,6 @@ const dismiss = () => (oncancel ?? onconfirm)();
     place-items: center;
     padding: var(--gutter);
     background: rgba(0, 0, 0, 0.45);
-    animation: fade 0.16s ease;
 }
 
 .dialog {
@@ -69,7 +81,6 @@ const dismiss = () => (oncancel ?? onconfirm)();
     padding: 20px;
     border-radius: 15px;
     background: var(--section);
-    animation: pop 0.2s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 .dialog h2 {

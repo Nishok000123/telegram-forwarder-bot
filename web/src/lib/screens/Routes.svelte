@@ -131,6 +131,6 @@ const plural = (n: number, one: string, many = `${one}s`) =>
     <div class="card inset-rules">
         <ActionRow icon="help" label="How it works" onclick={onhelp} />
         <ActionRow icon="owner" label="Owner" onclick={onowner} />
-        <ActionRow icon="key" label="Clone bot" onclick={onclone} />
+        <ActionRow icon="key" label="Create your own bot" onclick={onclone} />
     </div>
 </Page>

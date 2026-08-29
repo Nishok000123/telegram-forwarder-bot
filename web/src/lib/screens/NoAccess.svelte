@@ -36,8 +36,8 @@ async function copyMine() {
         {#if reason === "unclaimed"}
             Nobody has claimed this bot, so there is nothing to configure yet.
         {:else}
-            Only its owner can change what this bot forwards. Point your own bot
-            here instead — it takes about a minute.
+            Only its owner can change what this bot forwards. Set up your own
+            instead — it takes about a minute.
         {/if}
     </Hero>
 
@@ -57,17 +57,8 @@ async function copyMine() {
             </button>
         </div>
     {:else}
-        <h2 class="section-title">Clone bot</h2>
         <div class="card inset-rules">
-            <ActionRow icon="key" label="Use your own bot" onclick={onclone} />
-        </div>
-        <p class="note">
-            Paste your own bot's token and it runs the same forwarding, with its
-            own chats and rules.
-        </p>
-
-        <h2 class="section-title">More</h2>
-        <div class="card inset-rules">
+            <ActionRow icon="key" label="Create your own bot" onclick={onclone} />
             <button type="button" class="row" onclick={onhelp}>
                 <span class="icon"><Icon name="help" /></span>
                 <span class="grow">

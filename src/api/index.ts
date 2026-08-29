@@ -4,13 +4,14 @@ import express, {
     type Response,
     type Router
 } from "express";
-import { getBotById } from "../bot";
+import { getBotById, newBotLinkFor } from "../bot";
 import { claimBot, describeBot } from "../clone";
 import { validateConfig } from "../config";
 import { checkChat, checkChatId } from "../forwarding/health";
 import { sourceKeyboard } from "../handlers/pick";
 import logger from "../lib/logger";
 import { chatTitle, resolveChat, resolveUser } from "../lib/utils";
+import { applyManaged, managedState } from "../managed";
 import { checkLabel, type RouteStatus } from "../schema";
 import db from "../store";
 import { verifyInitData } from "./auth";
@@ -87,6 +88,14 @@ export function createApiRouter(): Router {
 
     // Cloning is the one thing a non-owner may do, so it is mounted above the
     // ownership gate. Everything below this point is owner-only.
+    // Whether Telegram can create the new bot, or a token must be pasted.
+    router.get(
+        "/clone/options",
+        asHandler(async (req, res) => {
+            res.json({ newBotLink: await newBotLinkFor(req.botId) });
+        })
+    );
+
     router.post(
         "/clone/check",
         asHandler(async (req, res) => {
@@ -118,6 +127,29 @@ export function createApiRouter(): Router {
     router.use((req, res, next) => {
         requireOwner(req, res, next).catch(next);
     });
+
+    // Only bots Telegram created for us: the manager holds these controls.
+    router.get(
+        "/managed",
+        asHandler(async (req, res) => {
+            res.json(await managedState(req.botId));
+        })
+    );
+
+    router.post(
+        "/managed",
+        asHandler(async (req, res) => {
+            const result = await applyManaged(req.botId, req.userId, {
+                rotate: req.body?.rotate === true,
+                remove: req.body?.remove === true
+            });
+            if (!result.ok) {
+                res.status(502).json({ error: result.error });
+                return;
+            }
+            res.json(result.state);
+        })
+    );
 
     router.get(
         "/routes",

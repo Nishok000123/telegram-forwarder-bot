@@ -159,9 +159,12 @@ $effect(() => {
     backButton(depth > 0);
 });
 
-// A fixed sheet does not stop the document behind it scrolling.
+// A fixed sheet, or a dialog, does not stop the document behind it scrolling.
 $effect(() => {
-    document.body.classList.toggle("sheet-open", isOverlay(loc));
+    document.body.classList.toggle(
+        "sheet-open",
+        isOverlay(loc) || !!dialog.current
+    );
 });
 
 async function load() {

@@ -93,6 +93,21 @@ export type BotInfo = {
     photo?: string;
 };
 
+/** Set when this bot can have Telegram create the clone, token-free. */
+export const cloneOptions = () =>
+    request<{ newBotLink?: string }>("/clone/options");
+
+export type ManagedState = { managed: boolean };
+
+/** Only meaningful for bots Telegram created through the manager. */
+export const managedState = () => request<ManagedState>("/managed");
+
+export const updateManaged = (patch: { rotate?: boolean; remove?: boolean }) =>
+    request<ManagedState>("/managed", {
+        method: "POST",
+        body: JSON.stringify(patch)
+    });
+
 /** Asks Telegram who the token belongs to, without claiming anything yet. */
 export const checkClone = (token: string) =>
     request<{ bot: BotInfo }>("/clone/check", {

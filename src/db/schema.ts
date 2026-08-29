@@ -37,6 +37,8 @@ export type ChatType = (typeof chatType.enumValues)[number];
 export const bots = pgTable("bots", {
     botId: bigint("bot_id", { mode: "number" }).primaryKey(),
     ownerId: bigint("owner_id", { mode: "number" }),
+    /** Set only for bots Telegram created through this instance's manager bot. */
+    managerId: bigint("manager_id", { mode: "number" }),
     createdAt: timestamp("created_at", { withTimezone: true })
         .notNull()
         .defaultNow()

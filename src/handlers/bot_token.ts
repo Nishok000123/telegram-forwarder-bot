@@ -35,6 +35,6 @@ export default async function bot_token_handler(ctx: BotContext) {
     await ctx.reply(
         result.alreadyRunning
             ? "That bot is already running, and it is yours again."
-            : "Done — that bot is yours. Send it /set to start forwarding."
+            : "Done — that bot is yours. Send it /settings to choose what it forwards."
     );
 }

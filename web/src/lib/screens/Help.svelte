@@ -1,4 +1,5 @@
 <script lang="ts">
+import * as api from "../api";
 import BackBar from "../components/BackBar.svelte";
 import Hero from "../components/Hero.svelte";
 import Page from "../components/Page.svelte";
@@ -72,7 +73,7 @@ const commands = [
     ["/cancel", "Stop a half-finished /set"]
 ];
 
-const cloneSteps = [
+const tokenSteps = [
     {
         title: "Create a bot",
         body: "Open @BotFather and send /newbot. Pick a name and a username."
@@ -86,6 +87,29 @@ const cloneSteps = [
         body: "You are its owner, with your own routes and settings. Nothing is shared with this bot."
     }
 ];
+
+const managedSteps = [
+    {
+        title: "Tap Create your own bot",
+        body: "In Settings, or under /start. Telegram asks for a name and makes the bot."
+    },
+    {
+        title: "It is yours",
+        body: "It starts here straight away, with your own routes and settings. Nothing is shared with this bot."
+    }
+];
+
+// Set only where this bot can have Telegram create the new one outright.
+let newBotLink = $state<string | undefined>(undefined);
+api.cloneOptions()
+    .then((o) => {
+        newBotLink = o.newBotLink;
+    })
+    .catch(() => {
+        // The token route always works, so it is the fallback.
+    });
+
+const cloneSteps = $derived(newBotLink ? managedSteps : tokenSteps);
 
 const faq = [
     {
@@ -240,10 +264,10 @@ const faq = [
     </div>
     <p class="note">
         Only the owner can use /set, /get, /rem and /settings. Everyone else can
-        still run their own clone.
+        still set up their own bot.
     </p>
 
-    <h2 class="section-title">Make your own clone</h2>
+    <h2 class="section-title">Your own bot</h2>
     <div class="card">
         {#each cloneSteps as step, i}
             <div class="row">
@@ -257,7 +281,7 @@ const faq = [
     </div>
     <p class="note">
         Free, and it takes about a minute.
-        <a href="https://t.me/BotFather">Open BotFather</a>.
+        {#if !newBotLink}<a href="https://t.me/BotFather">Open BotFather</a>.{/if}
     </p>
 
     <h2 class="section-title">Add an Open button</h2>
